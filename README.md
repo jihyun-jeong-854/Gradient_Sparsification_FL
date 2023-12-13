@@ -1,7 +1,8 @@
 # Gradient_Sparsification_FL
-top k gradient sparsification in federated learning
-Dataset : MNIST, FEMNIST
-Model : Lenet, MobileNetv2, AlexNet
+top k gradient sparsification in federated learning </br>
+
+Dataset : MNIST, FEMNIST</br>
+Model : Lenet, MobileNetv2, AlexNet</br>
 
 
 ## 1. Generate Dataset
