@@ -5,74 +5,95 @@ import time
 from clients.client import Client
 import copy
 
+
 class clientGradTopK(Client):
-    def __init__(self, args, id, train_samples, test_samples, **kwargs):
-        super().__init__(args, id, train_samples, test_samples, **kwargs)
-        
-        self.prev_model_state = None
+    def __init__(self, args, id, train_samples, **kwargs):
+        super().__init__(args, id, train_samples, **kwargs)
+
         self.train_loss = 0
         self.train_num = 0
+        self.model = copy.deepcopy(args.model)
+        self.optimizer = torch.optim.SGD(self.model.parameters(),lr=self.learning_rate)
+        self.learning_rate_scheduler = torch.optim.lr_scheduler.ExponentialLR(
+            optimizer=self.optimizer, 
+            gamma=args.learning_rate_decay_gamma
+        )
+        self.accumulated_gradients = {}
+        self.current_gradients = {}
         self.init_gradients()
-    
-        
+           
     def init_gradients(self):
         for param in self.model.parameters():
-            param.grad = torch.zeros_like(param.data)
-        self.accumulated_gradients = {name: params.grad.data for name, params in self.model.named_parameters()}        
+            param.grad = torch.zeros_like(param.data)   
+             
     def train(self):
-        trainloader = self.load_train_data()
-        # self.model.to(self.device)
-        # self.prev_gradients = {name: params.grad.clone() for name , params in self.model.named_parameters()}
         self.train_loss = 0
-        self.train_num = 0 
-        self.model.train()
-        self.accumulated_gradients = {}
-        start_time = time.time()
+        self.train_num = 0
         
-        for i, (x, y) in enumerate(trainloader):
-
+        self.accumulated_gradients = {
+            name: torch.zeros_like(param.data) for name, param in self.model.named_parameters()
+        }
+        self.model.train()
+        start_time = time.time()
+        self.save_current_gradients()
+        self.save_current_params()
+        for i, (x, y) in enumerate(self.trainloader):
+        # x,y = self.get_next_train_batch(self.local_epochs)
             x = x.to(self.device)
             y = y.to(self.device)
 
             output = self.model(x)
+            self.optimizer.zero_grad()
+            
             loss = self.loss(output, y)
             self.train_loss += loss.item() * y.shape[0]
             self.train_num += y.shape[0]
-            self.optimizer.zero_grad()
+            
             loss.backward()
-            # self.optimizer.step()
-            self.accumulate_gradient()    
+            self.optimizer.step()
+            self.accumulate_gradient()
+              
+            # if self.learning_rate_decay:
+            #     self.learning_rate_scheduler.step()
+  
         self.train_time_cost["num_rounds"] += 1
         self.train_time_cost["total_cost"] += time.time() - start_time
 
     def accumulate_gradient(self):
         for layer_name, param in self.model.named_parameters():
-            if layer_name not in self.accumulated_gradients.keys(): 
-                self.accumulated_gradients[layer_name] = param.grad.data
-            else:
-                self.accumulated_gradients[layer_name] += param.grad.data
+            self.accumulated_gradients[layer_name] += param.grad.data.clone()
             
+    def save_current_gradients(self):
+        self.current_gradients = {
+            name: param.grad.data.clone() for name, param in self.model.named_parameters()
+        }
+    def save_current_params(self):
+        self.current_params = {
+            name: param.data.clone() for name, param in self.model.named_parameters()
+        }    
     def generate_message(self):
         # params_diff = self.subtract_params()
         # gradients = {name: params.grad.clone() for name , params in self.model.named_parameters()}
         top_k_ = self.get_top_k()  # current - initial 의 top k
-       
         return top_k_
 
-    
     def get_top_k(self):
         # grads = {name: params.grad.clone() for name , params in self.model.named_parameters()}
-        top_k = self.accumulated_gradients
+     
         if self.topk_algo == "global":
-            top_k = self.global_topk(top_k)
+            top_k = self.global_topk(self.accumulated_gradients)
         elif self.topk_algo == "chunk":
-            top_k = self.chunk_topk(top_k)   
+            top_k = self.chunk_topk(self.accumulated_gradients)
+        elif self.topk_algo == "none":
+            top_k = self.accumulated_gradients
+        else:
+            raise NotImplementedError
+
         return top_k
 
-    def chunk_topk(self,params_diff):
-     
+    def chunk_topk(self, params_diff):
         all_params = torch.cat([grad.reshape(-1) for grad in params_diff.values()])
-        chunks = all_params.chunk(self.topk, dim=-1)
+        chunks = all_params.chunk(self.topk * 2, dim=-1)
         for chunk in chunks:
             local_max_index = torch.abs(chunk.data).argmax().item()
             zeroed_out = set(range(len(chunk))) - set([local_max_index])
@@ -87,9 +108,8 @@ class clientGradTopK(Client):
             top_k_params[name] = top_k[start_idx:end_idx].view(param.data.shape)
             start_idx = end_idx
         return top_k_params
-    
-    def global_topk(self,params_diff):
-       
+
+    def global_topk(self, params_diff):
         all_grads = torch.cat([grad.reshape(-1) for grad in params_diff.values()])
         top_k = all_grads.abs().topk(self.topk)
         mask = set(range(len(all_grads))) - set(top_k.indices.tolist())
@@ -99,20 +119,28 @@ class clientGradTopK(Client):
         start_idx = 0
         top_k_grads = {}
 
-        for layer,param in self.model.named_parameters():
-            end_idx = start_idx + param.numel()
+        for layer, param in self.model.named_parameters():
+            end_idx = start_idx + param.data.numel()
             top_k_grads[layer] = all_grads[start_idx:end_idx].view(param.data.shape)
             start_idx = end_idx
-            
+    
         return top_k_grads
-   
-    def set_gradient(self,avg_gradient):
 
-        for layer,param in self.model.named_parameters():
-            param.grad.data.copy_(avg_gradient[layer]) 
-       
+    def set_gradient(self, avg_gradient):
+
+        for layer, param in self.model.named_parameters():
+            param.data.copy_(self.current_params[layer])
+            param.grad.data.copy_(avg_gradient[layer])
+            
         self.optimizer.step()
         
-            
-        
-      
+        # after = torch.cat([param.data.clone().reshape(-1) for param in self.model.parameters()])      
+        # print(torch.sum(before == after), len(before))
+   
+    # def set_gradient(optim, server_gradient):
+    #     for group in optim.param_groups:
+    #         for param in group['params']:
+    #             if param.grad is not None:  # Ensure gradient exists
+    #                 print(param.name,server_gradient)
+    #                 print('='*50)
+    #                 param.grad.data = server_gradient[param.name]

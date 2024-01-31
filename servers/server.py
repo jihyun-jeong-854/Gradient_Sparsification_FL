@@ -23,9 +23,9 @@ class Server(object):
         self.local_epochs = args.local_epochs
         self.batch_size = args.batch_size
         self.learning_rate = args.local_learning_rate
+        self.model_name = args.model_name
         self.global_model = copy.deepcopy(args.model)
         self.optimizer = torch.optim.SGD(self.global_model.parameters(), lr=self.learning_rate)
-        self.num_clients = args.num_clients
         self.algorithm = args.algorithm
        
         self.save_folder_name = args.save_folder_name
@@ -33,7 +33,10 @@ class Server(object):
 
         self.clients = []
         self.selected_clients = []
-        
+        self.num_clients = args.num_clients
+        self.join_ratio = args.join_ratio
+        self.random_join_ratio = args.random_join_ratio
+        self.num_join_clients = int(self.num_clients * self.join_ratio)
         self.client_ids = []
         self.client_weights = []
 
@@ -47,37 +50,45 @@ class Server(object):
        
         self.topk = self.args.topk
         self.topk_algo = self.args.topk_algo
-        self.test_loader = self.set_test_data()
+        self.num_writers = args.num_writers
+        # self.test_loader = self.set_test_data()
 
     def set_clients(self, clientObj):
         self.client_ids = []
         self.client_weights = []
         total_samples = 0
         for i in range(self.num_clients) :
-            train_data = read_client_data(self.dataset, i, is_train=True)
-            test_data = read_client_data(self.dataset, i, is_train=False)
-            
             client = clientObj(
                 self.args,
                 id=i,
-                train_samples=len(train_data),
-                test_samples=len(test_data),
+                train_samples=self.num_writers,
             )
-            
+            train_data_size = client.train_data_size
             self.clients.append(client)
             self.client_ids.append(i)
-            self.client_weights.append(len(train_data))
-            total_samples += len(train_data)
+            self.client_weights.append(train_data_size)
+            total_samples += train_data_size
             
         for i, w in enumerate(self.client_weights):
-            self.client_weights[i] = w / total_samples
+            self.client_weights[i] = w/total_samples
+         
+            
+    def select_clients(self):
+        if self.random_join_ratio:
+            self.current_num_join_clients = np.random.choice(range(self.num_join_clients, self.num_clients+1), 1, replace=False)[0]
+        else:
+            self.current_num_join_clients = self.num_join_clients
+        selected_clients = list(np.random.choice(self.clients, self.current_num_join_clients, replace=False))
 
+        return selected_clients
+    
     def set_test_data(self):
         test_data = []
         for i in range(self.num_clients):
             test_data.extend(read_client_data(self.dataset, i, is_train=False))
+       
 
-        return DataLoader(test_data, self.batch_size, drop_last=False, shuffle=True) 
+        return DataLoader(test_data, len(test_data), drop_last=False, shuffle=True) 
 
     def send_models(self):
         assert len(self.clients) > 0
@@ -90,13 +101,18 @@ class Server(object):
             client.send_time_cost["num_rounds"] += 1
             client.send_time_cost["total_cost"] += 2 * (time.time() - start_time)
             
-    def save_global_model(self):
+    def save_global_model(self,cur_epoch):
         model_path = os.path.join("checkpoint")
         if not os.path.exists(model_path):
             os.makedirs(model_path)
-        model_path = os.path.join(model_path, self.algorithm + self.dataset + "_server" + ".pt")
+        # global_path = os.path.join(model_path, self.model_name + self.topk_algo + str(self.topk) + "_server" + ".pt")
+        # client_path = os.path.join(model_path, self.model_name +self.topk_algo + str(self.topk)  + "_client_epoch_"+str(cur_epoch) + ".pt")
+        # torch.save(self.global_model, global_path)
+      
+        client_path = os.path.join(model_path, self.model_name + self.topk_algo + str(self.topk)  + "_client_"+ str(cur_epoch) + ".pt")
+        torch.save(self.clients[0].model, client_path)
         
-        torch.save(self.global_model, model_path)
+        
 
     def save_results(self):
         algo = self.dataset + "_" + self.algorithm
@@ -121,6 +137,7 @@ class Server(object):
         tot_correct = []
         tot_auc = []
         for c in self.clients:
+            
             ct, ns, auc = c.test_metrics()
             tot_correct.append(ct*1.0)
             tot_auc.append(auc*ns)
@@ -129,6 +146,7 @@ class Server(object):
         ids = [c.id for c in self.clients]
 
         return ids, num_samples, tot_correct, tot_auc 
+    
     def client_evaluate(self,acc=None,loss=None):
         stats = self.client_test_metrics()
         stats_train = self.train_metrics()

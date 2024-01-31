@@ -15,7 +15,7 @@ def read_data(dataset, idx, is_train=True):
         return train_data
 
     else:
-        test_data_dir = os.path.join(DATA_PATH, dataset, 'test')
+        test_data_dir = os.path.join(DATA_PATH, dataset, 'test/')
 
         test_file =  os.path.join(test_data_dir, str(idx) + '.npz')
         with open(test_file, 'rb') as f:
@@ -25,20 +25,15 @@ def read_data(dataset, idx, is_train=True):
 
 
 def read_client_data(dataset, idx, is_train=True):
-   
-    if is_train:
-        train_data = read_data(dataset, idx, is_train)
-        X_train = torch.Tensor(train_data['x']).type(torch.float32)
-        y_train = torch.Tensor(train_data['y']).type(torch.int64)
-        # return X_train, y_train
-        train_data = [(x, y) for x, y in zip(X_train, y_train)]
-        return train_data
-    else:
-        test_data = read_data(dataset, idx, is_train)
-        X_test = torch.Tensor(test_data['x']).type(torch.float32)
-        y_test = torch.Tensor(test_data['y']).type(torch.int64)
-        # return X_test, y_test
-        test_data = [(x, y) for x, y in zip(X_test, y_test)]
-        return test_data
+
+    X_ , y_ = [], []
+    for id in idx:
+        data = read_data(dataset, id, is_train)
+        X_.extend(torch.Tensor(data['x']).type(torch.float32))
+        y_.extend(torch.Tensor(data['y']).type(torch.int64))
+    # return X_train, y_train
+    data_ = [(x, y) for x, y in zip(X_, y_)]
+    return data_
+
 
 
