@@ -7,7 +7,7 @@
 # 5. Server receives the aggregated information from the cloud server
 
 import copy
-from average import average_weights
+from servers.serverGradTopK import aggregate_gradients
 
 class Edge():
 
@@ -60,7 +60,7 @@ class Edge():
         """
         received_dict = [dict for dict in self.receiver_buffer.values()]
         sample_num = [snum for snum in self.sample_registration.values()]
-        self.shared_state_dict = average_weights(w = received_dict,
+        self.shared_state_dict = aggregate_gradients(w = received_dict,
                                                  s_num= sample_num)
 
     def send_to_client(self, client):

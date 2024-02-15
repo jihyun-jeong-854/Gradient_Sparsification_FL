@@ -16,7 +16,7 @@ class Cloud(object):
         self.num_clients = args.num_clients
         self.num_edges = args.num_edges
         self.num_writers = args.num_writers
-        self.epochs = args.epoch
+        self.local_epochs = args.epoch
         self.clients = []
         self.client_ids = []
         self.client_weights = []
@@ -64,11 +64,12 @@ class Cloud(object):
     
     def train(self):
         self.refresh_cloudserver()
-        for num_edgeagg in range():
+        for epoch in range(self.local_epochs):
             edge_loss = [0.0]* self.num_edges
             edge_sample = [0]* self.num_edges
             correct_all = 0.0
             total_all = 0.0
+            
             # no edge selection included here
             # for each edge, iterate
             for i,edge in enumerate(self.edges):

@@ -8,7 +8,6 @@ from tqdm import tqdm
 
 from torch import nn
 
-
 class FedTopK(Server):
     def __init__(self, args, times):
         super().__init__(args, times)

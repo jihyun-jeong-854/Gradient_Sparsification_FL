@@ -21,8 +21,8 @@ from models.alexnet_mnist import AlexNetMNIST
 from utils.result import average_data
 from utils.memory import MemReporter
 
-# from edge import Edge
-# from cloud import Cloud
+from edge import Edge
+from cloud import Cloud
 
 logger = logging.getLogger()
 logger.setLevel(logging.ERROR)
@@ -63,7 +63,7 @@ def run(args):
         # select algorithm
         if args.algorithm == "GradTopK":
             server = FedTopK(args, i)
-            # server = Cloud(args)
+            server = Cloud(args)
 
         else:
             raise NotImplementedError
