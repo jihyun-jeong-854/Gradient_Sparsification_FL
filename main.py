@@ -21,6 +21,9 @@ from models.alexnet_mnist import AlexNetMNIST
 from utils.result import average_data
 from utils.memory import MemReporter
 
+# from edge import Edge
+# from cloud import Cloud
+
 logger = logging.getLogger()
 logger.setLevel(logging.ERROR)
 
@@ -60,10 +63,13 @@ def run(args):
         # select algorithm
         if args.algorithm == "GradTopK":
             server = FedTopK(args, i)
+            # server = Cloud(args)
 
         else:
             raise NotImplementedError
-
+        
+        # create edge and assign client id
+       
         server.train()
 
         time_list.append(time.time() - start)
@@ -102,7 +108,7 @@ if __name__ == "__main__":
         help="Local learning rate",
     )
     parser.add_argument("-ld", "--learning_rate_decay", type=bool, default=True)
-    parser.add_argument("-ldg", "--learning_rate_decay_gamma", type=float, default=0.99)
+    parser.add_argument("-ldg", "--learning_rate_decay_gamma", type=float, default=0.995)
     parser.add_argument("-gr", "--global_rounds", type=int, default=2000)
     parser.add_argument(
         "-ls",
@@ -122,6 +128,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-nc", "--num_clients", type=int, default=3, help="Total number of clients"
     )
+    parser.add_argument("-ne","--num_edges", type=int, default=20, help="number of edges")
     parser.add_argument("-t", "--times", type=int, default=1, help="Running times")
     parser.add_argument(
         "-eg", "--eval_gap", type=int, default=1, help="Rounds gap for evaluation"

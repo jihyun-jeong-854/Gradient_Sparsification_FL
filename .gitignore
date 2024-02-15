@@ -8,3 +8,4 @@ servers/__pycache__
 models/__pycache__
 clients/__pycache__
 checkpoint/*
+*.bat

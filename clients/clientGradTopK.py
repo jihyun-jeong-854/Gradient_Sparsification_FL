@@ -16,8 +16,8 @@ class clientGradTopK(Client):
         self.optimizer = torch.optim.SGD(self.model.parameters(),lr=self.learning_rate)
         self.learning_rate_scheduler = torch.optim.lr_scheduler.ExponentialLR(
             optimizer=self.optimizer, 
-            gamma=args.learning_rate_decay_gamma
-        )
+            gamma=0.995)
+                                   
         self.accumulated_gradients = {}
         self.current_gradients = {}
         self.init_gradients()
@@ -53,8 +53,8 @@ class clientGradTopK(Client):
             self.optimizer.step()
             self.accumulate_gradient()
               
-            # if self.learning_rate_decay:
-            #     self.learning_rate_scheduler.step()
+        if self.learning_rate_decay:
+            self.learning_rate_scheduler.step()
   
         self.train_time_cost["num_rounds"] += 1
         self.train_time_cost["total_cost"] += time.time() - start_time
@@ -74,25 +74,29 @@ class clientGradTopK(Client):
     def generate_message(self):
         # params_diff = self.subtract_params()
         # gradients = {name: params.grad.clone() for name , params in self.model.named_parameters()}
-        top_k_ = self.get_top_k()  # current - initial 의 top k
-        return top_k_
+        top_k_,time_cost = self.get_top_k()  # current - initial 의 top k
+        return top_k_,time_cost
 
     def get_top_k(self):
         # grads = {name: params.grad.clone() for name , params in self.model.named_parameters()}
      
         if self.topk_algo == "global":
-            top_k = self.global_topk(self.accumulated_gradients)
+            top_k,time_cost = self.global_topk(self.accumulated_gradients)
         elif self.topk_algo == "chunk":
-            top_k = self.chunk_topk(self.accumulated_gradients)
+            top_k,time_cost = self.chunk_topk(self.accumulated_gradients)
         elif self.topk_algo == "none":
             top_k = self.accumulated_gradients
+            time_cost = 0
         else:
             raise NotImplementedError
 
-        return top_k
+        return top_k,time_cost
 
     def chunk_topk(self, params_diff):
+        s_t = time.time()
+        time_cost = 0
         all_params = torch.cat([grad.reshape(-1) for grad in params_diff.values()])
+        indices = len(all_params) / self.topk
         chunks = all_params.chunk(self.topk * 2, dim=-1)
         for chunk in chunks:
             local_max_index = torch.abs(chunk.data).argmax().item()
@@ -107,14 +111,16 @@ class clientGradTopK(Client):
             end_idx = start_idx + param.data.numel()
             top_k_params[name] = top_k[start_idx:end_idx].view(param.data.shape)
             start_idx = end_idx
-        return top_k_params
+        return top_k_params, time_cost
 
     def global_topk(self, params_diff):
+        s_t = time.time()
         all_grads = torch.cat([grad.reshape(-1) for grad in params_diff.values()])
         top_k = all_grads.abs().topk(self.topk)
         mask = set(range(len(all_grads))) - set(top_k.indices.tolist())
 
         all_grads[list(mask)] = 0
+        e_t = time.time()
 
         start_idx = 0
         top_k_grads = {}
@@ -124,7 +130,7 @@ class clientGradTopK(Client):
             top_k_grads[layer] = all_grads[start_idx:end_idx].view(param.data.shape)
             start_idx = end_idx
     
-        return top_k_grads
+        return top_k_grads, e_t - s_t
 
     def set_gradient(self, avg_gradient):
 
@@ -144,3 +150,22 @@ class clientGradTopK(Client):
     #                 print(param.name,server_gradient)
     #                 print('='*50)
     #                 param.grad.data = server_gradient[param.name]
+    
+    def send_to_edgeserver(self, edgeserver):
+        edgeserver.receive_from_client(client_id= self.id,
+                                        cshared_state_dict = copy.deepcopy(self.model.shared_layers.state_dict())
+                                        )
+        return None
+
+    def receive_from_edgeserver(self, shared_state_dict):
+        self.receiver_buffer = shared_state_dict
+        return None
+
+    def sync_with_edgeserver(self):
+        """
+        The global has already been stored in the buffer
+        :return: None
+        """
+        # self.model.shared_layers.load_state_dict(self.receiver_buffer)
+        self.model.update_model(self.receiver_buffer)
+        return None

@@ -41,10 +41,10 @@ class FedTopK(Server):
             # self.send_models() # send global model to local models
             # self.updated_clients = []
             self.client_gradients = []
-
             for client in tqdm(self.selected_clients, desc="training clients..."):
                 client.train()
-                client_gradient = client.generate_message()
+                client_gradient,topk_time_cost = client.generate_message()
+                
                 self.client_gradients.append(client_gradient)
             
             self.aggregate_gradients()
@@ -60,7 +60,8 @@ class FedTopK(Server):
                 wandb.log(
                     {
                         "train epochs": i + 1,
-                        "time cost for each epoch": self.Budget[-1],
+                        # "time cost for each epoch": self.Budget[-1],
+                        "time cost for top k": topk_time_cost,
                         "averaged train loss": train_loss,
                         "averaged test accuracy": test_acc,
                         "averaged test auc": test_auc,
@@ -91,6 +92,7 @@ class FedTopK(Server):
             # print('aggregated', torch.count_nonzero(weighted_layer))
             # print("="*50)
             self.grads[layer] = weighted_layer.clone()
+        return self.grads
 
     def send_gradients(self):
         # self.count_non_zero_grads()
