@@ -8,32 +8,21 @@ import numpy as np
 import copy
 from servers.serverGradTopK import aggregate_gradients
 from clients.clientGradTopK import clientGradTopK
-from edge import Edge
+
 
 class Cloud(object):
     def __init__(self, args):
         self.args = args
-        self.num_clients = args.num_clients
-        self.num_edges = args.num_edges
-        self.num_writers = args.num_writers
+     
+       
         self.local_epochs = args.epoch
         self.clients = []
         self.client_ids = []
         self.client_weights = []
-        self.receiver_buffer = {}
-        self.shared_state_dict = {}
-        self.id_registration = []
-        self.sample_registration = {}
-        # self.shared_state_dict = shared_layers.state_dict()
-        self.clock = []
         
-        self.set_clients(clientObj=clientGradTopK)
-        self.assign_clients()
         print("Finished creating and assigning clients to edge.")
         
-        
     def set_clients(self,clientObj):
-
         self.total_samples = 0
         for i in range(self.num_clients) :
             client = clientObj(
@@ -64,6 +53,7 @@ class Cloud(object):
     
     def train(self):
         self.refresh_cloudserver()
+        
         for epoch in range(self.local_epochs):
             edge_loss = [0.0]* self.num_edges
             edge_sample = [0]* self.num_edges
@@ -75,7 +65,7 @@ class Cloud(object):
             for i,edge in enumerate(self.edges):
                 edge.refresh_edgeserver()
                 client_loss = 0.0
-                selected_cnum = max(int(clients_per_edge * args.frac),1)
+                selected_cnum = max(int(clients_per_edge * self.args.frac),1)
                 selected_cids = np.random.choice(edge.cids,
                                                  selected_cnum,
                                                  replace = False,

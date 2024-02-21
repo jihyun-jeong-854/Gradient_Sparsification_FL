@@ -10,8 +10,8 @@ import copy
 from servers.serverGradTopK import aggregate_gradients
 
 class Edge():
-
-    def __init__(self, id, cids, shared_layers):
+    
+    def __init__(self, id, cids, shared_model):
         """
         id: edge id
         cids: ids of the clients under this edge
@@ -30,11 +30,11 @@ class Edge():
         self.id = id
         self.cids = cids
         self.receiver_buffer = {}
-        self.shared_state_dict = {}
+
         self.id_registration = []
         self.sample_registration = {}
         self.all_trainsample_num = 0
-        self.shared_state_dict = shared_layers.state_dict()
+        self.shared_gradients = {}
         self.clock = []
 
     def refresh_edgeserver(self):
