@@ -151,21 +151,4 @@ class clientGradTopK(Client):
     #                 print('='*50)
     #                 param.grad.data = server_gradient[param.name]
     
-    def send_to_edgeserver(self, edgeserver):
-        edgeserver.receive_from_client(client_id= self.id,
-                                        cshared_state_dict = copy.deepcopy(self.model.shared_layers.state_dict())
-                                        )
-        return None
-
-    def receive_from_edgeserver(self, shared_state_dict):
-        self.receiver_buffer = shared_state_dict
-        return None
-
-    def sync_with_edgeserver(self):
-        """
-        The global has already been stored in the buffer
-        :return: None
-        """
-        # self.model.shared_layers.load_state_dict(self.receiver_buffer)
-        self.model.update_model(self.receiver_buffer)
-        return None
+  

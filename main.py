@@ -10,7 +10,7 @@ import torchvision
 import logging
 
 from servers.serverGradTopK import FedTopK
-
+from servers.serverhfl import HierFL
 
 from models.lenet_femnist import LeNetFEMNIST
 from models.lenet_mnist import LeNetMNIST
@@ -22,7 +22,6 @@ from utils.result import average_data
 from utils.memory import MemReporter
 
 from edge import Edge
-from cloud import Cloud
 
 logger = logging.getLogger()
 logger.setLevel(logging.ERROR)
@@ -62,8 +61,8 @@ def run(args):
 
         # select algorithm
         if args.algorithm == "GradTopK":
-            server = FedTopK(args, i)
-            server = Cloud(args)
+            # server = FedTopK(args, i)
+            server = HierFL(args)
 
         else:
             raise NotImplementedError
@@ -109,9 +108,10 @@ if __name__ == "__main__":
     )
     parser.add_argument("-ld", "--learning_rate_decay", type=bool, default=True)
     parser.add_argument("-ldg", "--learning_rate_decay_gamma", type=float, default=0.995)
-    parser.add_argument("-gr", "--global_rounds", type=int, default=2000)
+    parser.add_argument("-nsa", "--num_server_aggregation", type=int, default=2000)
+    parser.add_argument("-nea","--num_edge_aggregation",type=int,help="number of edge aggregation")
     parser.add_argument(
-        "-ls",
+        "-le",
         "--local_epochs",
         type=int,
         default=1,
