@@ -19,8 +19,6 @@ class Server(object):
         self.device = args.device
         self.dataset = args.dataset
         self.num_classes = args.num_classes
-        self.global_rounds = args.global_rounds
-        self.local_epochs = args.local_epochs
         self.batch_size = args.batch_size
         self.learning_rate = args.local_learning_rate
         self.model_name = args.model_name
@@ -29,7 +27,6 @@ class Server(object):
         self.algorithm = args.algorithm
        
         self.save_folder_name = args.save_folder_name
-       
 
         self.clients = []
         self.selected_clients = []
@@ -38,7 +35,6 @@ class Server(object):
         self.random_join_ratio = args.random_join_ratio
         self.num_join_clients = int(self.num_clients * self.join_ratio)
         self.client_ids = []
-        self.client_weights = []
 
         self.rs_test_acc = []
         self.rs_test_auc = []
@@ -48,14 +44,14 @@ class Server(object):
         self.eval_gap = args.eval_gap
         self.client_drop_rate = args.client_drop_rate
        
-        self.topk = self.args.topk
+        self.topk = self.args.k1
         self.topk_algo = self.args.topk_algo
         self.num_writers = args.num_writers
         # self.test_loader = self.set_test_data()
 
     def set_clients(self, clientObj):
         self.client_ids = []
-        self.client_weights = []
+     
         total_samples = 0
         for i in range(self.num_clients) :
             client = clientObj(
@@ -66,12 +62,8 @@ class Server(object):
             train_data_size = client.train_data_size
             self.clients.append(client)
             self.client_ids.append(i)
-            self.client_weights.append(train_data_size)
             total_samples += train_data_size
-            
-        for i, w in enumerate(self.client_weights):
-            self.client_weights[i] = w/total_samples
-         
+   
             
     def select_clients(self):
         if self.random_join_ratio:
@@ -87,7 +79,6 @@ class Server(object):
         for i in range(self.num_clients):
             test_data.extend(read_client_data(self.dataset, i, is_train=False))
        
-
         return DataLoader(test_data, len(test_data), drop_last=False, shuffle=True) 
 
     def send_models(self):
@@ -109,7 +100,7 @@ class Server(object):
         # client_path = os.path.join(model_path, self.model_name +self.topk_algo + str(self.topk)  + "_client_epoch_"+str(cur_epoch) + ".pt")
         # torch.save(self.global_model, global_path)
       
-        client_path = os.path.join(model_path, self.model_name + self.topk_algo + str(self.topk)  + "_client_"+ str(cur_epoch) + ".pt")
+        client_path = os.path.join(model_path, self.model_name + self.topk_algo + str(self.k1)  + "_client_"+ str(cur_epoch) + ".pt")
         torch.save(self.clients[0].model, client_path)
         
         
@@ -130,9 +121,7 @@ class Server(object):
                 hf.create_dataset("rs_test_auc", data=self.rs_test_auc)
                 hf.create_dataset("rs_train_loss", data=self.rs_train_loss)
 
-
     def client_test_metrics(self):
-        
         num_samples = []
         tot_correct = []
         tot_auc = []

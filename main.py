@@ -62,7 +62,7 @@ def run(args):
         # select algorithm
         if args.algorithm == "GradTopK":
             # server = FedTopK(args, i)
-            server = HierFL(args)
+            server = HierFL(args,i)
 
         else:
             raise NotImplementedError
@@ -75,12 +75,12 @@ def run(args):
 
     print(f"\nAverage time cost: {round(np.average(time_list), 2)}s.")
 
-    # Global average
-    average_data(dataset=args.dataset, algorithm=args.algorithm, times=args.times)
+    # # Global average
+    # average_data(dataset=args.dataset, algorithm=args.algorithm, times=args.times)
 
     print("All done!")
 
-    reporter.report()
+    # reporter.report()
 
 
 if __name__ == "__main__":
@@ -112,7 +112,7 @@ if __name__ == "__main__":
     parser.add_argument("-nea","--num_edge_aggregation",type=int,help="number of edge aggregation")
     parser.add_argument(
         "-le",
-        "--local_epochs",
+        "--local_epoch",
         type=int,
         default=1,
         help="Multiple update steps in one local epoch.",
@@ -122,7 +122,8 @@ if __name__ == "__main__":
                         help="Ratio of clients per round")
     parser.add_argument('-rjr', "--random_join_ratio", type=bool, default=False,
                         help="Random ratio of clients per round")
-    parser.add_argument("-tk", "--topk", type=int, default=1000)
+    parser.add_argument("-k1", "--k1", type=int, default=1000)
+    parser.add_argument("-k2", "--k2", type=int, default=1)
     parser.add_argument("-tkalgo", "--topk_algo", type=str, default="global")
     parser.add_argument("-nw", "--num_writers", type=int, default=1)
     parser.add_argument(
@@ -138,6 +139,7 @@ if __name__ == "__main__":
     parser.add_argument("-ab", "--auto_break", type=bool, default=False)
 
     # practical
+    parser.add_argument('-dp', "--dp", type=bool, default=False)
     parser.add_argument(
         "-cdr",
         "--client_drop_rate",
@@ -158,9 +160,11 @@ if __name__ == "__main__":
 
     print("Algorithm: {}".format(args.algorithm))
     print("TopK Method : {}".format(args.topk_algo))
-    print("TopK K : {}".format(args.topk))
+    print("TopK K on Client : {}".format(args.k1))
+    print("TopK K on Edge chunk : {}".format(args.k2))
+    print("DP Applied : {}".format(args.dp))
     print("Local batch size: {}".format(args.batch_size))
-    print("Local steps: {}".format(args.local_epochs))
+    print("Local steps: {}".format(args.local_epoch))
     print("Local learing rate: {}".format(args.local_learning_rate))
     print("Total number of clients: {}".format(args.num_clients))
     print("Client drop rate: {}".format(args.client_drop_rate))

@@ -21,7 +21,6 @@ class Client(object):
         self.dataset = args.dataset
         self.device = args.device
         self.id = id  # integer
-        self.train_samples = train_samples # 합칠 npz 파일 개수
         self.save_folder_name = args.save_folder_name
 
         self.num_classes = args.num_classes
@@ -30,28 +29,26 @@ class Client(object):
         self.batch_size = args.batch_size
         self.learning_rate = args.local_learning_rate
         self.learning_rate_decay = args.learning_rate_decay
-        self.local_epochs = args.local_epochs
-        self.topk = args.topk
+       
+        self.topk = args.k1
         self.topk_algo = args.topk_algo
         self.train_time_cost = {'num_rounds': 0, 'total_cost': 0.0}
         self.send_time_cost = {'num_rounds': 0, 'total_cost': 0.0}
 
         self.loss = nn.CrossEntropyLoss()
-        
+        self.train_data_size = 0
         self.trainloader = self.load_train_data()
         self.testloader = self.load_test_data()
+        
         self.iter_trainloader = iter(self.trainloader)
         
-       
         
     def load_train_data(self):
         data_idx = [id for id in range(self.id*self.train_samples, (self.id+1)*self.train_samples)]
         train_data = read_client_data(self.dataset, data_idx, is_train=True)
-        print('client id: ', self.id ,'train data: ', len(train_data) )
+        # print('client id: ', self.id ,'data idx', data_idx,'train data: ', len(train_data) )
         self.train_data_size = len(train_data)
-        return DataLoader(train_data, self.batch_size, drop_last=True, shuffle=True)
-       
-  
+        return DataLoader(train_data, self.batch_size, drop_last=True, shuffle=True) 
 
     def load_test_data(self):
         data_idx = [id for id in range(self.id*self.train_samples, (self.id+1)*self.train_samples)]
@@ -109,6 +106,21 @@ class Client(object):
         for param, new_param in zip(model.parameters(), new_params):
             param.data = new_param.data.clone()
 
+    def test_model(self):
+        correct = 0.0
+        total = 0.0
+        self.model.eval()
+        with torch.no_grad():
+            for data in self.testloader:
+                inputs, labels = data
+                inputs = inputs.to(self.device)
+                labels = labels.to(self.device)
+                outputs = self.model(inputs)
+                _, predict = torch.max(outputs, 1)
+                total += labels.size(0)
+                correct += (predict == labels).sum().item()
+        return correct, total
+    
     def test_metrics(self):
 
         # self.model = self.load_model('model')

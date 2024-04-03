@@ -96,7 +96,7 @@ class clientGradTopK(Client):
         s_t = time.time()
         time_cost = 0
         all_params = torch.cat([grad.reshape(-1) for grad in params_diff.values()])
-        indices = len(all_params) / self.topk
+       
         chunks = all_params.chunk(self.topk * 2, dim=-1)
         for chunk in chunks:
             local_max_index = torch.abs(chunk.data).argmax().item()
@@ -108,8 +108,29 @@ class clientGradTopK(Client):
         start_idx = 0
         top_k_params = {}
         for name, param in self.model.named_parameters():
+            print(start_idx,end_idx)
             end_idx = start_idx + param.data.numel()
             top_k_params[name] = top_k[start_idx:end_idx].view(param.data.shape)
+            start_idx = end_idx
+        return top_k_params, time_cost
+    
+    
+    def chunk_topk_eff(self, params_diff):
+        s_t = time.time()
+        time_cost = 0
+        top_k_params = torch.cat([grad.clone().reshape(-1) for grad in params_diff.values()])
+       
+        chunk_len = len(top_k_params) / (self.topk * 2)
+        for chunk_id in range(self.topk * 2):
+            local_max_index = torch.abs(top_k_params[chunk_id*chunk_len:(chunk_id+1)*chunk_len]).argmax().item()
+            zeroed_out = set(range(chunk_id*chunk_len,(chunk_id+1)*chunk_len)) - set([local_max_index])
+            top_k_params[zeroed_out] = 0
+        
+        start_idx = 0
+        
+        for name, param in self.model.named_parameters():
+            end_idx = start_idx + param.data.numel()
+            top_k_params[name] = top_k_params[start_idx:end_idx].view(param.data.shape)
             start_idx = end_idx
         return top_k_params, time_cost
 
