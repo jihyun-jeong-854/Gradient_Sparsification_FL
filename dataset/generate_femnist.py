@@ -6,7 +6,7 @@ import random
 import torch
 import torchvision.transforms as transforms
 from torch.utils.data import Dataset
-from dataset.dataset_utils import check, separate_data, split_data, save_file
+from dataset_utils import check, separate_data, split_data, save_file
 
 import os
 ROOT_PATH = os.path.dirname(os.path.abspath(__file__)) 
@@ -28,16 +28,15 @@ def relabel(c):
         return int(c, 16) - 61  
     
 class FemnistDataset(Dataset):
-    def __init__(self, data, transform, root):
+    def __init__(self, data, transform):
         # super(FemnistNiidDataset, self).__init__()
 
         self.data = data
         self.transforms = transform
-        self.root = root
+
         self.transform = transform
         self.images = self.get_images()
         self.targets = self.get_targets()
-        
         
     def __getitem__(self, index):
         return self.images[index], self.targets[index]
@@ -45,7 +44,7 @@ class FemnistDataset(Dataset):
     def get_images(self):
         pixel_values = []
         for i in range(len(self.data)):
-            path = os.path.join(self.root, self.data[i][0])
+            path = os.path.join(ROOT_PATH, self.data[i][0])
             image = Image.open(path).convert("L")
             pixel_value = self.transform(image)
             pixel_values.append(pixel_value)
@@ -72,7 +71,7 @@ def get_writer_id(data, num_clients):
         return user_ids
     
 # Allocate data to users
-def generate_mnist(data_path, meta_path, save_path,  num_clients, num_classes, niid, balance, partition):
+def generate_femnist(dataset, meta_path, save_path,  num_clients, num_classes, niid, balance, partition):
     if not os.path.exists(save_path):
         os.makedirs(save_path)
         
@@ -98,7 +97,7 @@ def generate_mnist(data_path, meta_path, save_path,  num_clients, num_classes, n
     for i in range(len(writer_ids)):
         
         user_data = [row[1] for row in data if row[0] == writer_ids[i]][0]
-        dataset = FemnistDataset(data = user_data, transform = transform, root = data_path)
+        dataset = FemnistDataset(data = user_data, transform = transform)
         dataloader = torch.utils.data.DataLoader(
             dataset, batch_size=len(dataset.data), shuffle=False)
   
@@ -122,16 +121,16 @@ if __name__ == "__main__":
     parser.add_argument('--balance', type=bool, default=False)
     parser.add_argument('--partition', type=bool, default=None)
     parser.add_argument('--num_clients', type=int, default=100)
-    parser.add_argument('--data_path', type=str, default='femnist')
+    parser.add_argument('--dataset', type=str, default='FEMNIST')
     parser.add_argument('--meta_file_name', type=str, default='images_by_writer.pkl')
-    parser.add_argument('--save_path', type=str, default='femnist')
+    parser.add_argument('--save_path', type=str, default='FEMNIST')
     args = parser.parse_args()
     
     random.seed(1)
     np.random.seed(1)
     num_classes = 62
    
-    meta_path = os.path.join(args.data_path, args.meta_file_name)
+    meta_path = os.path.join(args.dataset,'intermediate', args.meta_file_name)
     save_path = os.path.join(ROOT_PATH, args.save_path)
     
-    generate_mnist(args.data_path, meta_path, save_path, args.num_clients, num_classes, args.niid, args.balance, args.partition)
+    generate_femnist(args.dataset, meta_path, save_path, args.num_clients, num_classes, args.niid, args.balance, args.partition)
